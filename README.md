@@ -5,8 +5,12 @@ Note que o test_adminServer e assim por diante, são usados como testes automati
 
 ## Modelagem dos Dados
 
-Para conversão dos objetos e organização do código, o arquivo model.py informa
-as classes usadas pelos clientes e administradores.
+As aplicações Cliente e Administrador usam os modelos de dados descritos no arquivo model.py. Note que o contexto de uma livraria é simulado pelo programa.
+
+A classe Cliente, consiste no nome, e-mail e senha do usuário. Sendo que o ID do cliente é o seu e-mail. Quanto ao produto, os atributos são o Título do livro, a descrição ou sinopse do livro, a quantidade dele no estoque e o seu preço. O seu ID é o título do livro. Cada Pedido é composto pela quantidade do Produto (Livro) que será pedido, o custo que é o preço do livro multiplicado pela quantidade solicitada, o Cliente que solicitou o pedido e o Produto propriamente dito.
+
+A classe Mensagem é usada para a comunicação entre os usuários e os portais. Assim, temos a função que foi chamada, exemplo cadastrarCliente, o ID, seja o do Produto, Pedido ou Cliente, e os dados da mensagem, que podem ou não ser usados, geralmente são objetos das demais classes.
+
 
 ```python
 @dataclass
@@ -76,15 +80,13 @@ class Pedido:
 
 ```
 
+## Portais Cliente e Administrador
 
-## Aplicação Administrador
+A comunicação entre portal e cliente é feita por meio de sockets. E entre os Portais pelo protocolo MQTT.
 
-### Portal Administrador
+Os arquivos admin_server.py e cliente_server.py contém toda a configuração dos sockets para envio e recebimento de Mensagens.
 
-Começamos por inicializar o portal do Administrador. Ele permite que até 5 conexões sejam feitas (o número pode ser alterado)
-E que múltiplos portais sejam abertos. Para isso, o programa pede ao usuário que insira o número da porta.
-Assim a todo portal é executado em uma porta diferente. Note que este mesmo número deverá ser usado pelos
-administradores que desejam se conectar a um portal.
+Não há restrições para os portais. A cada execução do código admin_server.py é solicitado um número de porta diferente para que não haja conflitos. Quanto as conexões aceitas por cada portal deixei definido um limite de 5, esse número pode ser alterado.
 
 ```python
 	try:
@@ -97,82 +99,32 @@ administradores que desejam se conectar a um portal.
 	except socket.error as e:
 		print(str(e))
 		return
-
+		
 	print("\n<< Portal Administrador >>\n")
 	print("Servidor conectado ao host: " + host + " na porta: " + str(port))
 
 	serverSocket.listen(5)
 ```
 
-Para comunicação ente o portal Administrador e Cliente usei o protocolo MQTT as configurações dele são como segue:
+A função API nesses arquivos deserializa a Mensagem enviada pelo cliente e determina qual operação da API será acionada. O retorno de cada uma dessas funções é repassado para o cliente.
 
 ```python
-	# Configurações MQTT para comunicação com o cliente
-	adminMQTT = pub.connectMQTT()
-	adminMQTT.loop_start()
+def API(conn, data, adminMQTT):
+
+	try:
+		mensagem = json.loads(data, object_hook=Mensagem.mensagemDecoder)
+	except:
+		print("Erro ao decodificar mensagem recebida do administrador")
+	else:
+		opcao = mensagem.funcao
+
+		if opcao == "recuperarCliente":
+			CID = mensagem.id
+			topico, msg = admin_api.recuperarCliente(CID)
+		
+		print("Enviado do topico " + topico + " a mensagem " + msg + "\n")
+		conn.send(msg.encode())
 ```
-
-### Administrador
-
-O administrador, como mencionado anteriormente, deve informar o número do servidor 
-(o número da porta que o servidor Administrador está usando). Toda a configuração de sockets e comunicação com o servidor
-é feita pelo arquivo admin.py
-
-```python
-	host = "127.0.0.1"            
-	port = int(input("Digite o número do servidor: ")) 
-	adminSocket.connect((host, port))
-	opcoesMenu()
-	adminSocket.close()
-```
-
-As casos de uso do administrador são descritos pelo arquivo admin_funcoes.py 
-Os seguintes menus descrevem as funcões usadas.
-
-```python
-def menuPrincipal():
-	print("\n<< Administrador da Livraria Lovelace >>")
-	print("1 - Manipular Clientes")
-	print("2 - Manipular Produtos")
-	print("3 - Sair")
-	print("Digite uma opcao: ",end="") 
-
-def menuCliente():
-	print("\n<< Cliente >>")
-	print("1 - Recuperar Cliente")
-	print("2 - Inserir Cliente")
-	print("3 - Modificar Cliente")
-	print("4 - Apagar Cliente")
-	print("5 - Sair")
-	print("Digite uma opcao: ",end="") 
-
-def menuProduto():
-	print("\n<< Produto >>")
-	print("6 - Recuperar Produto")
-	print("7 - Inserir Produto")
-	print("8 - Modificar Produto")
-	print("9 - Apagar Produto")
-	print("10 - Sair")
-	print("Digite uma opcao: ",end="") 
-```
-
-Cada função do administrador pede que o usuário preencha determinadas informações.
-Com elas inicializamos uma Mensagem que será enviado ao servidor por meio do socket.
-
-```python
-def inserirCliente():
-	nome = input("Nome do cliente: ")
-	email = input("Email do cliente: ")
-	senha = input("Senha do cliente: ")
-
-	cliente = Cliente(nome,email,senha)
-
-	msg = Mensagem("inserirCliente",email,cliente)
-	msg = str(json.dumps(asdict(msg)))
-
-	return msg
-```
-
 
 
 

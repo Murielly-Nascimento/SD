@@ -244,6 +244,29 @@ def autentica():
 
 Os testes automatizados de ambas as aplicações Cliente e Administrador são definidos nos arquivos com prefixo test. Para cada caso a um file para o servidor e o cliente que devem ser executadas. Todas as operações da API são testadas e os códigos de erro ou sucesso são enviados do Servidor para o Cliente.
 
+## Compilação
+
+Inicializar o sevidor do administrador
+```
+python admin_server.py
+```
+
+Inicializar o Administrador
+```
+python admin.py
+```
+
+Inicializar o servidor do cliente
+```
+python client_server.py
+```
+
+Inicializar o cliente
+```
+python client.py
+```
+
+OBS: Recomendável inicializar o servidor cliente e administrador ao mesmo tempo para garantir a conexão MQTT entre ambos.
 
 
 

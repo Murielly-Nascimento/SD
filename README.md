@@ -1,7 +1,14 @@
 # SD
 
 O trabalho é divido nas aplicações voltadas para cliente e administrador, cada um com arquivos de testes. 
-Note que o test_adminServer e assim por diante, são usados como testes automatizados das API's.
+
+  * [Modelagem dos Dados](#modelagem-dos-dados)
+  * [Portais Cliente e Administrador](#portais-cliente-e-administrador)
+  * [APIs](#apis)
+  * [Protocolo MQTT](#protocolo-mqtt)
+  * [Administrador e Cliente](#administrador-e-cliente)
+  * [Funcionalidades do Administrador e Cliente](#funcionalidades-do-administrador-e-cliente)
+  * [Testes Automatizados](#testes-automatizados)
 
 ## Modelagem dos Dados
 
@@ -150,7 +157,7 @@ def recuperarCliente(CID):
 	return topico, msg
 ```
 
-## Comunicação MQTT
+## Protocolo MQTT
 
 O portal Administrador publica nos tópicos Cadastro, Modificação e Remoção de Produtos e Clientes, através do arquivo publish.py. E o portal Cliente se inscreve nesses mesmos tópicos através do arquivo publish.py
 
@@ -194,7 +201,7 @@ As funcionalidades dos usuários de ambas as aplicações (Cliente e Administrad
 	clientSocket.close()
 ```
 
-## Funções do Administrador e Cliente
+## Funcionalidades do Administrador e Cliente
 
 As funcionalidades dos administradores e cliente são definidas nos arquivos admin_funcoes.py e cliente_funcoes.py. Em ambos os casos Menus interativos foram definidos para organização do código.
 

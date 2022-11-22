@@ -125,14 +125,117 @@ def API(conn, data, adminMQTT):
 		print("Enviado do topico " + topico + " a mensagem " + msg + "\n")
 		conn.send(msg.encode())
 ```
+## APIs
 
+As APIs do cliente e do administrador são definidas no arquivo admin_api.py e cliente_api.py. Ambas usam tabelas hash locais como Banco de Dados. E cada função define um tópico e uma mensagem a ser retornada.
 
+```python
+# BD
 
+bd_clientes = {}
+bd_produtos = {}
+bd_pedidos = {}
 
+# Clients
+		
+def recuperarCliente(CID):
+	topico = "clientes/getCliente"
+	msg = ""
 
+	if CID not in bd_clientes:
+		msg = "Cliente não encontrado"
+	else: 
+		msg = str(json.dumps(asdict(bd_clientes[CID])))
 
+	return topico, msg
+```
 
+## Comunicação MQTT
 
+O portal Administrador publica nos tópicos Cadastro, Modificação e Remoção de Produtos e Clientes, através do arquivo publish.py. E o portal Cliente se inscreve nesses mesmos tópicos através do arquivo publish.py
+
+```python
+def publish(client, topico, msg):
+	result = client.publish(topico, msg)
+	status = result[0]
+	if status == 0:
+		print(f"\nPublicado no topico: `{topico}` a mensagem: `{msg}` \n")
+	else:
+		print(f"Falha ao enviar mensagem para o topico: {topico}\n")
+
+def subscribe(client: mqtt_client, topic):
+	def on_message(client, userdata, msg):
+		print(f"\nRecebido do topico `{msg.topic}` a mensagem: `{msg.payload.decode()}` \n")
+
+		if msg.topic == "clientes/cadCliente":
+			api.salvarCliente(msg.payload.decode())
+		elif msg.topic == "clientes/removeCliente":
+			api.removerCliente(msg.payload.decode())
+		elif msg.topic == "produtos/cadProduto":
+			api.salvarProduto(msg.payload.decode())
+		elif msg.topic == "produtos/removeProduto":
+			api.removerProduto(msg.payload.decode())
+		elif msg.topic == "produtos/putProduto":
+			api.atualizarProduto(msg.payload.decode())
+
+	client.subscribe(topic)
+	client.on_message = on_message
+```
+
+## Administrador e Cliente
+
+As funcionalidades dos usuários de ambas as aplicações (Cliente e Administrador) são definidas nos arquivos cliente.py e admin.py. A configuração dos sockets para envio e recebimento de informação também é feita nesses arquivos. E em ambos os casos é solicitado o número da porta em que o servidor está rodando.
+
+```python
+	host = "127.0.0.1"            
+	port = int(input("Digite o número da porta: "))
+	clientSocket.connect((host, port))
+	login()
+	clientSocket.close()
+```
+
+## Funções do Administrador e Cliente
+
+As funcionalidades dos administradores e cliente são definidas nos arquivos admin_funcoes.py e cliente_funcoes.py. Em ambos os casos Menus interativos foram definidos para organização do código.
+
+```python
+def menuPrincipal():
+	print("\n<< Administrador da Livraria Lovelace >>")
+	print("1 - Manipular Clientes")
+	print("2 - Manipular Produtos")
+	print("3 - Sair")
+	print("Digite uma opcao: ",end="") 
+	
+def menuPrincipal():
+	print("\n<< Cliente >>")
+	print("1 - Inserir Pedido")
+	print("2 - Modificar Pedido")
+	print("3 - Enumerar Pedido")
+	print("4 - Enumerar Pedidos")
+	print("5 - Cancelar Pedido")
+	print("6 - Sair")
+	print("Digite uma opcao: ",end="") 
+```
+
+Cada função solicita que o usuário preencha uma sequência de informações que serão convertidas em um objeto Mensagem que posteriormente será enviado para o servidor.
+
+```python
+def autentica():
+	print("\n<< Bem vindo a Livraria Lovelace >>\n")
+	nome = input("Digite seu nome: ")
+	email = input("Digite seu email: ")
+	senha = input("Digite sua senha: ")
+
+	cliente = Cliente(nome,email,senha)
+	msg = Mensagem("autenticarCliente",email,cliente)
+	msg = str(json.dumps(asdict(msg)))
+
+	return msg, email
+```
+
+## Testes Automatizados
+
+Os testes automatizados de ambas as aplicações Cliente e Administrador são definidos nos arquivos com prefixo test. Para cada caso a um file para o servidor e o cliente que devem ser executadas. Todas as operações da API são testadas e os códigos de erro ou sucesso são enviados do Servidor para o Cliente.
 
 
 

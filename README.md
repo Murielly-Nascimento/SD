@@ -197,25 +197,25 @@ def API(conn, data, adminMQTT):
 ```
 ## APIs
 
-As APIs do cliente e do administrador são definidas no arquivo admin_api.py e cliente_api.py. Ambas usam tabelas hash locais como Banco de Dados. E cada função define um tópico e uma mensagem a ser retornada.
+As APIs do cliente e do administrador são definidas no arquivo admin_api.py e cliente_api.py. E cada função define um tópico e uma mensagem a ser retornada.
 
 ```python
-# BD
-
-bd_clientes = {}
-bd_produtos = {}
-bd_pedidos = {}
-
-# Clients
-		
 def recuperarCliente(CID):
 	topico = "clientes/getCliente"
 	msg = ""
 
-	if CID not in bd_clientes:
+	with clienteBD.begin() as txn:
+		raw_bytes = txn.get(CID.encode())
+		if raw_bytes!= None:
+			dados = Cliente.from_buffer_copy(raw_bytes)
+		else:
+			dados = None
+
+	if dados == None:
 		msg = "Cliente não encontrado"
 	else: 
-		msg = str(json.dumps(asdict(bd_clientes[CID])))
+		cliente = ClienteDTO(dados.nome.decode(), dados.email.decode(), dados.senha.decode())
+		msg = str(json.dumps(asdict(cliente)))
 
 	return topico, msg
 ```

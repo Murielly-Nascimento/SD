@@ -5,7 +5,7 @@ O trabalho é divido nas aplicações voltadas para cliente e administrador, cad
   * [Modelagem dos Dados](#modelagem-dos-dados)
   * [Portais Cliente e Administrador](#portais-cliente-e-administrador)
   * [APIs](#apis)
-  * [Protocolo MQTT](#protocolo-mqtt)
+  * [Banco de dados LMDB](#banco-de-dados-lmdb)
   * [Administrador e Cliente](#administrador-e-cliente)
   * [Funcionalidades do Administrador e Cliente](#funcionalidades-do-administrador-e-cliente)
   * [Testes Automatizados](#testes-automatizados)
@@ -18,8 +18,12 @@ A classe Cliente, consiste no nome, e-mail e senha do usuário. Sendo que o ID d
 
 A classe Mensagem é usada para a comunicação entre os usuários e os portais. Assim, temos a função que foi chamada, exemplo cadastrarCliente, o ID, seja o do Produto, Pedido ou Cliente, e os dados da mensagem, que podem ou não ser usados, geralmente são objetos das demais classes.
 
+O padrão DTO foi implementado para melhor organização do projeto. Logo as classes para transferências de dados são definidas no arquivo dto.py.
+
 
 ```python
+# Classes DTO
+
 @dataclass
 class Mensagem:
 	funcao: str
@@ -35,7 +39,7 @@ class Mensagem:
 		return namedtuple('Mensagem', obj.keys())(*obj.values())
 
 @dataclass
-class Cliente:
+class ClienteDTO:
 	nome: str
 	email: str
 	senha:str
@@ -49,7 +53,7 @@ class Cliente:
 		return namedtuple('Cliente', obj.keys())(*obj.values())
 
 @dataclass
-class Produto:
+class ProdutoDTO:
 	titulo: str
 	descricao: str
 	quantidade: int
@@ -69,27 +73,86 @@ class Produto:
 
 
 @dataclass
-class Pedido:
+class PedidoDTO:
+	OID: str
 	quantidade: int
 	custo: float
-	produto: Produto
-	cliente: Cliente
-	OID: int
+	PID: str
+	CID: str
 
-	def __init__(self, quantidade, produto: Produto, cliente:Cliente):
+	def __init__(self, OID, quantidade, custo, PID, CID):
+		self.OID = OID
 		self.quantidade = quantidade
-		self.custo = produto.preco * quantidade
-		self.produto = produto
-		self.OID = 1
+		self.custo = custo
+		self.PID = PID
+		self.CID = CID
+		
 	
 	def toJSON(self):
 		return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 ```
 
+As classes para transações no banco de dados ficam no arquivo model.py
+
+```python
+# Classes BD
+
+class Ident(Array):
+	_length_ = 36
+	_type_ = c_char
+
+class Cliente(Structure):
+	_fields_ = [
+		('nome', Ident),
+		('email', Ident),
+		('senha', Ident)
+	]
+
+	def __repr__(self):
+		return f"{self.__class__.__name__}({', '.join(['='.join([key, str(val)]) for key, val in self.as_dict.items()])})"
+
+
+class Produto(Structure):
+	_fields_ = [
+		('titulo', Ident),
+		('descricao', Ident),
+		('quantidade', c_int),
+		('preco', c_double)
+	]
+
+	def __repr__(self):
+		return f"{self.__class__.__name__}({', '.join(['='.join([key, str(val)]) for key, val in self.as_dict.items()])})"
+
+class Pedido(Structure):
+	_fields_ =[
+		('OID', Ident),
+		('quantidade', c_int),
+		('custo', c_double),
+		('PID', Ident),
+		('CID', Ident)
+	]
+
+	def __repr__(self):
+		return f"{self.__class__.__name__}({', '.join(['='.join([key, str(val)]) for key, val in self.as_dict.items()])})"
+
+class AsDictMixin:
+    @property
+    def as_dict(self):
+        d = {}
+        for (key, _) in self._fields_:
+            if isinstance(getattr(self, key), AsDictMixin):
+                d[key] = getattr(self, key).as_dict
+            elif isinstance(getattr(self, key), bytes):
+                d[key] = getattr(self, key).decode()
+            else:
+                d[key] = getattr(self, key)
+        return d
+```
+
 ## Portais Cliente e Administrador
 
-A comunicação entre portal e cliente é feita por meio de sockets. E entre os Portais pelo protocolo MQTT.
+A comunicação entre portal e cliente é feita por meio de sockets.
 
 Os arquivos admin_server.py e cliente_server.py contém toda a configuração dos sockets para envio e recebimento de Mensagens.
 
@@ -157,36 +220,23 @@ def recuperarCliente(CID):
 	return topico, msg
 ```
 
-## Protocolo MQTT
+## Banco de Dados LMDB
 
-O portal Administrador publica nos tópicos Cadastro, Modificação e Remoção de Produtos e Clientes, através do arquivo publish.py. E o portal Cliente se inscreve nesses mesmos tópicos através do arquivo publish.py
+A implementação do banco de dados foi feita usando o LMDB e sua implemtação fica nos arquivos admin_api.py e client_api.py
 
 ```python
-def publish(client, topico, msg):
-	result = client.publish(topico, msg)
-	status = result[0]
-	if status == 0:
-		print(f"\nPublicado no topico: `{topico}` a mensagem: `{msg}` \n")
-	else:
-		print(f"Falha ao enviar mensagem para o topico: {topico}\n")
-
-def subscribe(client: mqtt_client, topic):
-	def on_message(client, userdata, msg):
-		print(f"\nRecebido do topico `{msg.topic}` a mensagem: `{msg.payload.decode()}` \n")
-
-		if msg.topic == "clientes/cadCliente":
-			api.salvarCliente(msg.payload.decode())
-		elif msg.topic == "clientes/removeCliente":
-			api.removerCliente(msg.payload.decode())
-		elif msg.topic == "produtos/cadProduto":
-			api.salvarProduto(msg.payload.decode())
-		elif msg.topic == "produtos/removeProduto":
-			api.removerProduto(msg.payload.decode())
-		elif msg.topic == "produtos/putProduto":
-			api.atualizarProduto(msg.payload.decode())
-
-	client.subscribe(topic)
-	client.on_message = on_message
+clienteBD = lmdb.Environment("cliente.lmdb", map_size=Gi, subdir=True, readonly=False, metasync=True, sync=True,
+                           map_async=False, mode=493, create=True, readahead=True, writemap=True, meminit=True,
+                           max_readers=126, max_dbs=2, max_spare_txns=1, lock=True)
+			   
+			   
+produtoBD = lmdb.Environment("produto.lmdb", map_size=Gi, subdir=True, readonly=False, metasync=True, sync=True,
+                           map_async=False, mode=493, create=True, readahead=True, writemap=True, meminit=True,
+                           max_readers=126, max_dbs=2, max_spare_txns=1, lock=True)
+			   
+pedidoBD = lmdb.Environment("pedido.lmdb", map_size=Gi, subdir=True, readonly=False, metasync=True, sync=True,
+                           map_async=False, mode=493, create=True, readahead=True, writemap=True, meminit=True,
+                           max_readers=126, max_dbs=2, max_spare_txns=1, lock=True)
 ```
 
 ## Administrador e Cliente
